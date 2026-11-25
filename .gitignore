@@ -1,0 +1,11 @@
+# 内部应用标记 / WorkBuddy 项目数据（非源码）
+.wbapp_*.genie
+.workbuddy/
+
+# 历史打包产物（源码为准）
+*.zip
+
+# 系统/编辑器垃圾
+.DS_Store
+Thumbs.db
+*.swp

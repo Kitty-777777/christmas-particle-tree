@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Merry Christmas · 3D 粒子圣诞树</title>
+
+  <!-- 强制禁用缓存，确保每次都加载最新的脚本与样式 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <!-- 艺术字体：标题用（离线时自动回退到系统手写体） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./css/style.css?v=30" />
+
+  <!--
+    Three.js 通过 importmap 以 ES Module 方式从 CDN 加载。
+    注意：ES Module 需要通过 HTTP 访问（file:// 会被浏览器 CORS 拦截），
+    请用本地服务器打开，例如：python -m http.server 8080
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <!-- 手势识别：MediaPipe HandLandmarker（WebGL/WASM，本地打包，21 点 landmarks） -->
+</head>
+
+<body>
+  <!-- WebGL 渲染容器 -->
+  <div id="scene-container"></div>
+
+  <!-- 顶部艺术字标题 -->
+  <header class="top-title">
+    <h1 class="merry-title">Merry Christmas</h1>
+    <p class="subtitle">✦ 用手指点亮这棵圣诞树 ✦</p>
+  </header>
+
+  <!-- 右侧手势数字（1 / 2 / 3 / 4 出现时使用） -->
+  <div id="hand-number" class="hand-number" aria-live="polite"></div>
+
+  <!-- 相册页码（左上角，不遮挡 3D 主体） -->
+  <div id="photo-page" class="photo-page" aria-live="polite"></div>
+
+  <!-- 相册操作提示（右上角） -->
+  <div id="album-tip" class="album-tip">← 左右滑动翻页 → · 握拳 / 1 指退出</div>
+
+  <!-- 背景音乐开关（左下角，小巧不遮挡主体；点击 = 解锁音频的真实手势） -->
+  <button id="music-toggle" class="music-toggle" type="button" aria-label="开启背景音乐" title="开启背景音乐 (M)">
+    <span class="music-note">♪</span>
+  </button>
+
+  <!-- 手势按钮栏已移除：摄像头手势识别已稳定，键盘 1/2/3/4/O/F/P 仍可降级体验 -->
+
+  <!-- 底部状态提示 -->
+  <div class="hud">
+    <div id="gesture-label" class="gesture-label">正在加载 3D 场景…</div>
+    <div class="gesture-help">1 指 树形 &nbsp;·&nbsp; 2 指 星球 &nbsp;·&nbsp; 3 指 散开 &nbsp;·&nbsp; 4 指 相册 &nbsp;·&nbsp; OK 祝福 &nbsp;·&nbsp; 握拳 汇聚 &nbsp;·&nbsp; 张掌 提问 &nbsp;·&nbsp; ♪ 音乐</div>
+  </div>
+
+  <!-- 摄像头源：video/canvas 元素保留但视觉隐藏（opacity:0，不用 display:none，避免移动端黑帧导致识别失效） -->
+  <div id="preview-wrap" class="preview-wrap is-hidden camera-offscreen">
+    <video id="hand-video" class="hand-video" playsinline autoplay muted></video>
+    <canvas id="hand-preview" width="240" height="180"></canvas>
+    <span id="detect-hud" class="detect-hud">未检测到手</span>
+    <button id="delegate-switch" class="camera-switch delegate-switch" type="button" tabindex="-1">⚡</button>
+    <button id="camera-switch" class="camera-switch" type="button" tabindex="-1">🔄</button>
+  </div>
+
+  <!-- 启动面板：由用户点击触发摄像头权限申请 -->
+  <div id="start-panel" class="start-panel">
+    <div class="start-card">
+      <div class="start-ornament">🎄</div>
+      <h2>手势控制 · 粒子圣诞树</h2>
+      <p class="start-desc">开启摄像头，用手势与粒子互动</p>
+
+      <ul class="gesture-list">
+        <li><span class="key">1 指</span><span>保持圣诞树形态</span></li>
+        <li><span class="key">2 指</span><span>变形成带星环的自转星球</span></li>
+        <li><span class="key">3 指</span><span>粒子逐渐散开</span></li>
+        <li><span class="key">4 指</span><span>打开礼物相册（左右滑动翻页）</span></li>
+        <li><span class="key">OK</span><span>散开并显示「张嘉雯圣诞快乐」</span></li>
+        <li><span class="key">握拳</span><span>粒子重新汇聚成树</span></li>
+        <li><span class="key">张掌</span><span>显示「今天你开心了吗？」</span></li>
+      </ul>
+
+      <button id="start-btn" type="button">开启摄像头</button>
+      <p id="start-note" class="start-note">
+        摄像头画面仅在本地浏览器处理，不会上传；识别过程不显示预览画面。手势识别用 WebGL/WASM，无需 WebGPU。若设备不支持，可用键盘体验。
+      </p>
+      <p class="keyboard-tip">没有摄像头？可用键盘 <b>1 / 2 / 3 / 4 / O / F / P</b> 体验，相册内用 <b>← →</b> 翻页，<b>M</b> 开关音乐</p>
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js?v=30"></script>
+</body>
+</html>
